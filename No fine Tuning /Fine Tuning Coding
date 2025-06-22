@@ -1,0 +1,121 @@
+NO FINE TUNING CODES 
+
+# 📌 Step 1: Re-split the data with stratification to preserve target balance
+from sklearn.model_selection import train_test_split
+
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+
+# 📌 Step 2: Train a basic XGBoost classifier with more estimators (stronger model)
+from xgboost import XGBClassifier
+
+xgb_basic = XGBClassifier(
+    n_estimators=50,        # Increased from 10 to 50 for a stronger model
+    max_depth=3,            # Keeps the tree shallow to avoid overfitting
+    eval_metric='error',
+    use_label_encoder=False, # Prevents warnings in newer XGBoost versions
+    random_state=123
+)
+
+xgb_basic.fit(X_train, y_train)
+
+# 📌 Step 3: Predict and evaluate with richer metrics
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    confusion_matrix,
+    ConfusionMatrixDisplay
+)
+
+y_pred_basic = xgb_basic.predict(X_test)
+
+print("✅ Accuracy (basic model):", accuracy_score(y_test, y_pred_basic))
+print("\n📋 Classification Report:\n", classification_report(y_test, y_pred_basic))
+
+# 📌 Step 4: Visualize the confusion matrix
+import matplotlib.pyplot as plt
+
+ConfusionMatrixDisplay.from_predictions(y_test, y_pred_basic, cmap="Blues")
+plt.title("Confusion Matrix - Basic Model")
+plt.show()
+
+# 📌 Step 5: Plot feature importance to see which variables matter most
+from xgboost import plot_importance
+
+plot_importance(xgb_basic, max_num_features=10, importance_type='gain', grid=False)
+plt.title("Top 10 Feature Importances")
+plt.show()
+
+
+
+
+
+
+
+
+
+
+FINE TUNING CODES
+
+# STEP 1: Import required libraries
+from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.metrics import classification_report, confusion_matrix, ConfusionMatrixDisplay
+from xgboost import XGBClassifier, plot_importance
+import matplotlib.pyplot as plt
+import numpy as np
+
+# STEP 2: Split the data (with stratification)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, stratify=y, random_state=42
+)
+
+# STEP 3: Define the parameter grid for tuning
+param_grid = {
+    'max_depth': list(range(3, 13)),                          # Tree depth: 3 to 12
+    'alpha': [0, 0.001, 0.01, 0.1],                           # L1 regularization
+    'subsample': [0.25, 0.5, 0.75, 1],                        # Fraction of data for each tree
+    'learning_rate': np.linspace(0.01, 0.5, 10),              # Step size shrinkage
+    'n_estimators': [10, 25, 40]                              # Number of trees
+}
+
+# STEP 4: Instantiate base XGBoost Classifier
+xgb_clf = XGBClassifier(eval_metric='error', use_label_encoder=False, random_state=123)
+
+# STEP 5: Wrap the model in RandomizedSearchCV
+xgb_search = RandomizedSearchCV(
+    estimator=xgb_clf,
+    param_distributions=param_grid,
+    n_iter=10,
+    cv=3,
+    verbose=2,
+    n_jobs=-1,
+    random_state=123
+)
+
+# STEP 6: Fit the model
+xgb_search.fit(X_train, y_train)
+
+# STEP 7: Predict using best found model
+y_pred_tuned = xgb_search.predict(X_test)
+
+# STEP 8: Print evaluation metrics
+print("Best Parameters:", xgb_search.best_params_)
+print("Best Cross-Validation Accuracy:", xgb_search.best_score_)
+print("\nClassification Report:\n", classification_report(y_test, y_pred_tuned))
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred_tuned))
+
+# STEP 9: Plot confusion matrix
+cm = confusion_matrix(y_test, y_pred_tuned)
+disp = ConfusionMatrixDisplay(confusion_matrix=cm, display_labels=xgb_search.best_estimator_.classes_)
+disp.plot(cmap='Blues', values_format='d')
+plt.title("Confusion Matrix - Fine-Tuned Model")
+plt.grid(False)
+plt.show()
+
+# STEP 10: Plot top 10 feature importances
+plt.figure(figsize=(10, 6))
+plot_importance(xgb_search.best_estimator_, max_num_features=10, importance_type='gain')
+plt.title("Top 10 Feature Importances (Fine-Tuned Model)")
+plt.grid(False)
+plt.show()
